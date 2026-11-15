@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="historyTable">
+    <div th:if="${error}" class="text-danger small" th:text="${error}"></div>
+    <div th:if="${error == null and #lists.isEmpty(history)}" class="text-muted small">
+        No saved analyses yet for <span th:text="${ticker}"></span>.
+    </div>
+    <div th:if="${!#lists.isEmpty(history)}" class="table-responsive">
+        <table class="table table-sm table-bordered bg-white mb-0 small">
+            <thead class="table-light">
+            <tr>
+                <th>Analysed at (IST)</th>
+                <th>Risk</th>
+                <th>Action</th>
+                <th>Time limit</th>
+                <th class="text-end">Avg / LTP then (₹)</th>
+                <th>Summary &amp; rationale</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${history}">
+                <td th:text="${r.generatedAtText}"></td>
+                <td>
+                    <span class="badge"
+                          th:classappend="${r.stored.advisory.riskZone.name() == 'LOW'} ? 'bg-success'
+                            : (${r.stored.advisory.riskZone.name() == 'MODERATE'} ? 'bg-warning text-dark'
+                            : (${r.stored.advisory.riskZone.name() == 'HIGH'} ? 'bg-orange' : 'bg-danger'))"
+                          th:text="${r.stored.advisory.riskZone}"></span>
+                </td>
+                <td><strong th:text="${r.stored.advisory.action}"></strong></td>
+                <td th:text="${r.stored.advisory.timeLimit}"></td>
+                <td class="text-end" th:text="${r.stored.avgPrice} + ' / ' + ${r.stored.lastPrice}"></td>
+                <td>
+                    <div th:text="${r.stored.advisory.managementSummary}"></div>
+                    <ul class="mb-0 ps-3">
+                        <li th:each="p : ${r.stored.advisory.rationalePoints}" th:text="${p}"></li>
+                    </ul>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div id="ingestion-control" th:fragment="ingestionControl"
+     class="rounded border shadow-sm p-3 mb-3"
+     th:classappend="${ingestion.running} ? 'bg-primary-subtle border-primary'
+        : (${ingestion.enabled} ? 'bg-success-subtle border-success' : 'bg-danger-subtle border-danger')"
+     hx-get="/ingestion/status" hx-trigger="every 5s" hx-swap="outerHTML">
+
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="fs-5 fw-bold">
+            <span th:if="${ingestion.running}" class="text-primary">
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>INGESTION RUNNING
+            </span>
+            <span th:if="${!ingestion.running and ingestion.enabled}" class="text-success">● INGESTION ACTIVE</span>
+            <span th:if="${!ingestion.enabled}" class="text-danger">■ INGESTION STOPPED</span>
+        </div>
+
+        <div class="small">
+            <span th:if="${ingestion.running}"
+                  th:text="'Processed ' + ${ingestion.progressDone} + ' of ' + ${ingestion.progressTotal} + ' stocks'"></span>
+            <span th:if="${!ingestion.running and ingestion.enabled and nextRunText != null}"
+                  th:text="'Next run at ' + ${nextRunText} + ' IST (in about ' + ${nextRunMinutes} + ' min)'"></span>
+            <span th:if="${!ingestion.running and ingestion.enabled and nextRunText == null}">Waiting for the next scheduled run</span>
+            <span th:if="${!ingestion.enabled}" class="text-danger fw-semibold">
+                No new data is being collected. Click Start to resume.
+            </span>
+        </div>
+
+        <div class="ms-auto d-flex gap-2">
+            <button th:if="${ingestion.enabled}" class="btn btn-sm btn-danger"
+                    hx-post="/ingestion/stop" hx-target="#ingestion-control" hx-swap="outerHTML">Stop</button>
+            <button th:unless="${ingestion.enabled}" class="btn btn-sm btn-success"
+                    hx-post="/ingestion/start" hx-target="#ingestion-control" hx-swap="outerHTML">Start</button>
+            <button class="btn btn-sm btn-outline-primary" th:disabled="${ingestion.running}"
+                    hx-post="/ingestion/run" hx-target="#ingestion-control" hx-swap="outerHTML">Run now</button>
+        </div>
+    </div>
+
+    <div th:if="${ingestion.running}" class="progress mt-2" style="height: 6px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated"
+             th:style="'width: ' + ${progressPercent} + '%'"></div>
+    </div>
+
+    <div class="small mt-2 text-muted">
+        Last run: <span th:text="${lastRunText}"></span>
+        · <span th:text="${ingestion.lastAdded} + ' new item(s)'"></span>
+        ·
+        <span th:text="${ingestion.lastOutcome}"
+              th:classappend="${ingestion.lastOutcome == 'OK' or ingestion.lastOutcome == 'Not run yet'} ? '' : 'text-danger fw-semibold'"></span>
+    </div>
+</div>
+</body>
+</html>

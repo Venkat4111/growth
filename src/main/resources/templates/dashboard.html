@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Portfolio &amp; Risk Advisor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        .bg-orange { background-color: #fd7e14 !important; color: #fff; }
+        .evidence-text { white-space: pre-line; font-size: .85rem; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-block; }
+    </style>
+</head>
+<body class="bg-light d-flex flex-column min-vh-100">
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">Portfolio &amp; Risk Advisor</span>
+        <a class="btn btn-outline-light btn-sm" th:href="@{/kite/login}">Kite Login</a>
+    </div>
+</nav>
+
+<main class="container-fluid flex-grow-1">
+    <div th:replace="~{fragments/ingestion :: ingestionControl}"></div>
+
+    <!-- Initial load, then the returned fragment re-polls itself every 300s (5-minute backend cycle) -->
+    <div id="portfolio-container"
+         hx-get="/dashboard/table"
+         hx-trigger="load"
+         hx-swap="outerHTML"
+         hx-indicator="#spinner">
+        <div class="text-center text-muted py-5">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+            Loading portfolio and AI analysis…
+        </div>
+    </div>
+    <div id="spinner" class="htmx-indicator text-muted small">Refreshing…</div>
+</main>
+
+<footer class="bg-white border-top text-center text-muted small py-3 mt-4">
+    AI-generated research summary based on public filings and news. Not SEBI-registered investment advice.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

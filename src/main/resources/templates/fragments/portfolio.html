@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<div id="portfolio-container" th:fragment="portfolioTable"
+     th:attr="hx-get=@{/dashboard/table(sort=${sort})}"
+     hx-trigger="every 300s" hx-swap="outerHTML" hx-indicator="#spinner">
+
+    <div th:if="${!#lists.isEmpty(rows)}" class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
+        <div>
+            <span class="badge bg-dark fs-6" th:text="'Stocks: ' + ${#lists.size(rows)}">Stocks: 0</span>
+            <span class="badge bg-danger ms-1" th:text="${lossCount} + ' in loss'"></span>
+            <span class="badge bg-success ms-1" th:text="${#lists.size(rows) - lossCount} + ' in profit'"></span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <label for="sort" class="form-label mb-0 small text-muted">Sort by</label>
+            <select id="sort" name="sort" class="form-select form-select-sm w-auto"
+                    th:attr="hx-get=@{/dashboard/table}"
+                    hx-trigger="change" hx-target="#portfolio-container" hx-swap="outerHTML"
+                    hx-indicator="#spinner">
+                <option th:each="o : ${sortOptions}" th:value="${o.name()}" th:text="${o.label}"
+                        th:selected="${o.name() == sort}"></option>
+            </select>
+        </div>
+    </div>
+
+    <div th:if="${loginRequired}" class="alert alert-warning">
+        You are not logged in to Zerodha Kite.
+        <a th:href="@{/kite/login}" class="alert-link">Log in</a> to load your holdings.
+    </div>
+    <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
+    <div th:if="${!loginRequired and error == null and #lists.isEmpty(rows)}" class="alert alert-info">
+        No holdings found.
+    </div>
+
+    <div th:if="${!#lists.isEmpty(rows)}" class="table-responsive bg-white shadow-sm rounded">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Stock Symbol</th>
+                <th class="text-end">Avg Buy Price (₹)</th>
+                <th class="text-end">Current / LTP (₹)</th>
+                <th>Risk Zone</th>
+                <th>AI Suggestion</th>
+                <th>Time Limit</th>
+                <th>Management Commentary &amp; Rationale</th>
+            </tr>
+            </thead>
+            <tbody>
+            <th:block th:each="row, st : ${rows}">
+                <tr>
+                    <td>
+                        <strong th:text="${row.holding.tradingSymbol}">SYMBOL</strong>
+                        <div class="text-muted small" th:text="'Qty ' + ${row.holding.quantity}"></div>
+                    </td>
+                    <td class="text-end"
+                        th:text="${#numbers.formatDecimal(row.holding.averagePrice, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                    <td class="text-end">
+                        <div th:text="${#numbers.formatDecimal(row.holding.lastPrice, 1, 'COMMA', 2, 'POINT')}">0.00</div>
+                        <div class="small"
+                             th:classappend="${row.holding.dayChangePercent.signum() >= 0} ? 'text-success' : 'text-danger'"
+                             th:text="'Day ' + ${row.holding.dayChangePercent} + '% (₹' + ${#numbers.formatDecimal(row.holding.dayChangeAmount, 1, 'COMMA', 2, 'POINT')} + ')'"></div>
+                        <div class="small"
+                             th:classappend="${row.holding.totalChangePercent.signum() >= 0} ? 'text-success' : 'text-danger'"
+                             th:text="'Total ' + ${row.holding.totalChangePercent} + '% (₹' + ${#numbers.formatDecimal(row.holding.unrealizedPnl, 1, 'COMMA', 2, 'POINT')} + ')'"></div>
+                    </td>
+                    <td>
+                        <span th:if="${row.advisory != null}" class="badge"
+                              th:classappend="${row.advisory.riskZone.name() == 'LOW'} ? 'bg-success'
+                                : (${row.advisory.riskZone.name() == 'MODERATE'} ? 'bg-warning text-dark'
+                                : (${row.advisory.riskZone.name() == 'HIGH'} ? 'bg-orange' : 'bg-danger'))"
+                              th:text="${row.advisory.riskZone}">LOW</span>
+                        <span th:if="${row.advisory == null}" class="text-muted">—</span>
+                    </td>
+                    <td>
+                        <strong th:if="${row.advisory != null}" th:text="${row.advisory.action}">HOLD</strong>
+                        <span th:if="${row.advisory == null}" class="text-muted">—</span>
+                    </td>
+                    <td th:text="${row.advisory != null} ? ${row.advisory.timeLimit} : '—'">—</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" type="button"
+                                data-bs-toggle="collapse" th:attr="data-bs-target='#detail-' + ${st.index}">
+                            View details
+                        </button>
+                    </td>
+                </tr>
+                <tr class="collapse" th:id="'detail-' + ${st.index}">
+                    <td colspan="7" class="bg-light">
+                        <div th:if="${row.advisory == null}" class="text-muted" th:text="${row.error}"></div>
+                        <div th:if="${row.analysedAt != null}" class="small text-muted mb-2"
+                             th:text="'Analysed at ' + ${row.analysedAt} + ' IST'"></div>
+                        <div th:if="${row.advisory != null}">
+                            <h6>Management commentary</h6>
+                            <p th:text="${row.advisory.managementSummary}"></p>
+                            <h6>Rationale</h6>
+                            <ul>
+                                <li th:each="p : ${row.advisory.rationalePoints}" th:text="${p}"></li>
+                            </ul>
+                            <h6>Retrieved evidence</h6>
+                            <div class="accordion">
+                                <div class="accordion-item" th:each="c, cs : ${row.evidence}">
+                                    <h2 class="accordion-header">
+                                        <button class="accordion-button collapsed py-2" type="button"
+                                                data-bs-toggle="collapse"
+                                                th:attr="data-bs-target='#ev-' + ${st.index} + '-' + ${cs.index}">
+                                            <span class="badge bg-secondary me-2" th:text="${c.source}"></span>
+                                            <span class="badge bg-info text-dark me-2" th:text="${c.docType}"></span>
+                                            <span class="small text-muted" th:text="${c.publishedAt}"></span>
+                                        </button>
+                                    </h2>
+                                    <div class="accordion-collapse collapse"
+                                         th:id="'ev-' + ${st.index} + '-' + ${cs.index}">
+                                        <div class="accordion-body evidence-text" th:text="${c.text}"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    th:attr="hx-get=@{/advisory/history(ticker=${row.holding.tradingSymbol})},hx-target='#hist-' + ${st.index}"
+                                    hx-swap="innerHTML">
+                                View analysis history
+                            </button>
+                            <div class="mt-2" th:id="'hist-' + ${st.index}"></div>
+                        </div>
+                    </td>
+                </tr>
+            </th:block>
+            </tbody>
+        </table>
+    </div>
+    <div class="text-muted small mt-2">
+        Last updated: <span th:text="${updatedAt}"></span> · auto-refreshes every 5 minutes
+    </div>
+</div>
+</body>
+</html>
