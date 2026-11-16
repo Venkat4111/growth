@@ -21,9 +21,12 @@ public class PortfolioRefreshScheduler {
     private final PortfolioService portfolio;
     private final KiteSessionStore store;
     private final RabbitTemplate rabbit;
+    private final MessagingConfig names;
     private volatile boolean brokerDown;
 
-    public PortfolioRefreshScheduler(PortfolioService portfolio, KiteSessionStore store, RabbitTemplate rabbit) {
+    public PortfolioRefreshScheduler(PortfolioService portfolio, KiteSessionStore store, RabbitTemplate rabbit,
+                                     MessagingConfig names) {
+        this.names = names;
         this.portfolio = portfolio;
         this.store = store;
         this.rabbit = rabbit;
@@ -35,7 +38,7 @@ public class PortfolioRefreshScheduler {
             return;
         }
         try {
-            rabbit.convertAndSend(MessagingConfig.REFRESH_QUEUE, new RefreshRequest(Instant.now()));
+            rabbit.convertAndSend(names.refreshQueueName(), new RefreshRequest(Instant.now()));
             if (brokerDown) {
                 log.info("RabbitMQ is reachable again");
                 brokerDown = false;

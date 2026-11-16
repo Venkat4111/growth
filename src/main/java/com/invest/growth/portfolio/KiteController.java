@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,6 +42,12 @@ public class KiteController {
         }
         auth.completeLogin(requestToken);
         return ResponseEntity.status(HttpStatus.FOUND).header("Location", "/").build();
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        auth.logout();
+        return ResponseEntity.status(HttpStatus.SEE_OTHER).header("Location", "/").build();
     }
 
     @GetMapping("/holdings")

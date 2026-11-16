@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "OPENAI_API_KEY=test", "KITE_API_KEY=test", "KITE_API_SECRET=test",
         "ingestion.fixed-rate-ms=3600000", "portfolio.refresh-rate-ms=3600000",
-        "spring.sql.init.mode=never"
+        "spring.sql.init.mode=never", "portfolio.messaging.prefix=portfolio-test"
 })
 class HoldingsMessagingTest {
 
@@ -42,7 +42,7 @@ class HoldingsMessagingTest {
         }
         store.save("fake-token", "u");
         HoldingView h = HoldingView.of("TEST", "NSE", 1, 10, 12, 1, 0.1);
-        rabbit.convertAndSend(MessagingConfig.UPDATES_EXCHANGE, "", new HoldingsUpdate(Instant.now(), List.of(h)));
+        rabbit.convertAndSend("portfolio-test.updates", "", new HoldingsUpdate(Instant.now(), List.of(h)));
 
         Awaitility.await().atMost(java.time.Duration.ofSeconds(10)).untilAsserted(() ->
                 assertThat(portfolio.getHoldings()).extracting(HoldingView::lastPrice)

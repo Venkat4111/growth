@@ -23,7 +23,7 @@
                   th:text="'Next run at ' + ${nextRunText} + ' IST (in about ' + ${nextRunMinutes} + ' min)'"></span>
             <span th:if="${!ingestion.running and ingestion.enabled and nextRunText == null}">Waiting for the next scheduled run</span>
             <span th:if="${!ingestion.enabled}" class="text-danger fw-semibold">
-                No new data is being collected. Click Start to resume.
+                Ingestion is off. Click Start to begin collecting data.
             </span>
         </div>
 

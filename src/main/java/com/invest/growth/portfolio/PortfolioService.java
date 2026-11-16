@@ -42,6 +42,10 @@ public class PortfolioService {
         return refresh();
     }
 
+    public void clearCache() {
+        snapshot = null;
+    }
+
     public Instant lastRefreshed() {
         Snapshot s = snapshot;
         return s == null ? null : s.fetchedAt();
@@ -98,19 +102,18 @@ public class PortfolioService {
     }
 
     /**
-     * One row per stock. Covers MTF shown as its own entry (product MTF), as an MTF-only stock
-     * (quantity 0 with the position in the nested mtf object), and normal holdings.
+     * One row per stock with normal and MTF quantity combined; an entry with product MTF is also handled.
      */
-    private static List<HoldingView> merge(List<Holding> holdings) {
+    static List<HoldingView> merge(List<Holding> holdings) {
         Map<String, Lot> bySymbol = new LinkedHashMap<>();
         for (Holding h : holdings) {
             int qty = effectiveQuantity(h);
             if (h.tradingSymbol == null || qty <= 0) {
                 continue;
             }
-            boolean mtf = "MTF".equalsIgnoreCase(h.product) || h.quantity <= 0;
+            int mtfQty = "MTF".equalsIgnoreCase(h.product) ? qty : mtfQuantity(h);
             Lot lot = new Lot(h.tradingSymbol, h.exchange, qty, effectiveAveragePrice(h), nz(h.lastPrice),
-                    h.dayChangePercentage, h.dayChange, mtf ? qty : 0);
+                    h.dayChangePercentage, h.dayChange, mtfQty);
             bySymbol.merge(h.tradingSymbol, lot, (x, y) -> {
                 int total = x.quantity() + y.quantity();
                 double avg = (x.avg() * x.quantity() + y.avg() * y.quantity()) / total;
@@ -129,17 +132,22 @@ public class PortfolioService {
         return getHoldings().stream().map(HoldingView::tradingSymbol).toList();
     }
 
-    /** MTF-only stocks come back with quantity 0 and the position under the nested mtf object. */
+    /**
+     * Kite reports MTF separately: {@code quantity} is the normal (CNC) quantity and {@code mtf.quantity} the MTF
+     * quantity. The top-level pnl and averagePrice already cover both, so the total is the sum.
+     */
+    private static int mtfQuantity(Holding h) {
+        return h.mtf != null ? Math.max(h.mtf.quantity, 0) : 0;
+    }
+
     private static int effectiveQuantity(Holding h) {
-        if (h.quantity > 0) {
-            return h.quantity;
-        }
-        return h.mtf != null ? h.mtf.quantity : 0;
+        return Math.max(h.quantity, 0) + mtfQuantity(h);
     }
 
     private static double effectiveAveragePrice(Holding h) {
-        if (h.quantity > 0 || h.mtf == null) {
-            return nz(h.averagePrice);
+        double avg = nz(h.averagePrice);
+        if (avg > 0 || h.mtf == null) {
+            return avg;
         }
         return nz(h.mtf.averagePrice);
     }

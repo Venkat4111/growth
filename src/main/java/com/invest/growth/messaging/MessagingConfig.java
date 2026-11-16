@@ -10,6 +10,7 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,26 +21,40 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MessagingConfig {
 
-    public static final String REFRESH_QUEUE = "portfolio.refresh.requests";
-    public static final String UPDATES_EXCHANGE = "portfolio.updates";
+    /** Names are prefixed so a second app or a test can use the same broker without sharing messages. */
+    public static final String REFRESH_QUEUE_EXPR = "${portfolio.messaging.prefix:portfolio}.refresh.requests";
+
+    private final String prefix;
+
+    public MessagingConfig(@Value("${portfolio.messaging.prefix:portfolio}") String prefix) {
+        this.prefix = prefix;
+    }
+
+    public String refreshQueueName() {
+        return prefix + ".refresh.requests";
+    }
+
+    public String updatesExchangeName() {
+        return prefix + ".updates";
+    }
 
     @Bean
     Queue refreshQueue() {
         // Length 1 + drop-head: if Kite is slow, stale requests are discarded instead of piling up
-        return QueueBuilder.durable(REFRESH_QUEUE)
+        return QueueBuilder.durable(refreshQueueName())
                 .withArguments(Map.of("x-max-length", 1, "x-overflow", "drop-head"))
                 .build();
     }
 
     @Bean
     FanoutExchange updatesExchange() {
-        return new FanoutExchange(UPDATES_EXCHANGE, false, false);
+        return new FanoutExchange(updatesExchangeName(), false, false);
     }
 
     @Bean
     Queue portfolioUpdatesQueue() {
         // RabbitMQ 4 rejects transient non-exclusive queues, so use a durable auto-delete queue per instance
-        return new Queue(UPDATES_EXCHANGE + "." + UUID.randomUUID(), true, false, true);
+        return new Queue(updatesExchangeName() + "." + UUID.randomUUID(), true, false, true);
     }
 
     @Bean

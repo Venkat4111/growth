@@ -8,6 +8,7 @@ import java.util.List;
 import com.invest.growth.advisor.AdvisoryOutcome;
 import com.invest.growth.advisor.StockAdvisorService;
 import com.invest.growth.portfolio.KiteAuthException;
+import com.invest.growth.portfolio.KiteAuthService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +25,11 @@ public class DashboardController {
 
     private final StockAdvisorService advisor;
     private final IngestionController ingestionController;
+    private final KiteAuthService kiteAuth;
 
-    public DashboardController(StockAdvisorService advisor, IngestionController ingestionController) {
+    public DashboardController(StockAdvisorService advisor, IngestionController ingestionController,
+                               KiteAuthService kiteAuth) {
+        this.kiteAuth = kiteAuth;
         this.advisor = advisor;
         this.ingestionController = ingestionController;
     }
@@ -33,6 +37,7 @@ public class DashboardController {
     @GetMapping("/")
     public String dashboard(Model model) {
         ingestionController.populate(model);
+        model.addAttribute("loggedIn", kiteAuth.isAuthenticated());
         return "dashboard";
     }
 

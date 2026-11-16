@@ -14,7 +14,7 @@ public class IngestionControl {
                          int progressDone, int progressTotal, Instant nextRun) {
     }
 
-    private final AtomicBoolean enabled = new AtomicBoolean(true);
+    private final AtomicBoolean enabled = new AtomicBoolean(false); // off until the Start button is pressed
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile Instant lastRun;
     private volatile int lastAdded;

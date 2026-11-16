@@ -38,7 +38,20 @@ class DashboardControllerTest {
     IngestionControl ingestionControl;
 
     @MockitoBean
+    com.invest.growth.portfolio.KiteAuthService kiteAuth;
+
+    @MockitoBean
     com.invest.growth.ingestion.IngestionScheduler scheduler;
+
+    @Test
+    void logoutButtonOnlyWhenLoggedIn() throws Exception {
+        when(ingestionControl.status()).thenReturn(new IngestionControl.Status(true, false, null, 0, "Not run yet", 0, 0, null));
+        when(kiteAuth.isAuthenticated()).thenReturn(true);
+        mvc.perform(get("/")).andExpect(content().string(org.hamcrest.Matchers.containsString("action=\"/kite/logout\"")));
+        when(kiteAuth.isAuthenticated()).thenReturn(false);
+        mvc.perform(get("/")).andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("/kite/logout"))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Kite Login")));
+    }
 
     @Test
     void pageHasDisclaimerAndHtmxLoader() throws Exception {

@@ -40,6 +40,8 @@ public class IngestionController {
     @PostMapping("/start")
     public String start(Model model) {
         control.setEnabled(true);
+        // First cycle starts right away instead of waiting for the next scheduled tick
+        Thread.startVirtualThread(scheduler::run);
         return render(model);
     }
 

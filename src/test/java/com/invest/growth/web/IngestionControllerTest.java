@@ -31,13 +31,14 @@ class IngestionControllerTest {
     IngestionScheduler scheduler;
 
     @Test
-    void stopThenStartTogglesJob() throws Exception {
-        mvc.perform(post("/ingestion/stop"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("INGESTION STOPPED")));
+    void isStoppedInitiallyAndStartThenStopTogglesJob() throws Exception {
         assertFalse(control.isEnabled());
         mvc.perform(post("/ingestion/start"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("INGESTION ACTIVE")));
         assertTrue(control.isEnabled());
+        mvc.perform(post("/ingestion/stop"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("INGESTION STOPPED")));
+        assertFalse(control.isEnabled());
     }
 }

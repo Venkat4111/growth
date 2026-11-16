@@ -31,7 +31,14 @@
 <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container-fluid">
         <span class="navbar-brand mb-0 h1">Portfolio &amp; Risk Advisor</span>
-        <a class="btn btn-outline-light btn-sm" th:href="@{/kite/login}">Kite Login</a>
+        <div class="d-flex align-items-center gap-2">
+            <span th:if="${loggedIn}" class="badge bg-success">Kite connected</span>
+            <a th:unless="${loggedIn}" class="btn btn-outline-light btn-sm" th:href="@{/kite/login}">Kite Login</a>
+            <form th:if="${loggedIn}" th:action="@{/kite/logout}" method="post" class="m-0"
+                  onsubmit="return confirm('Log out of Kite? Live prices will pause until you log in again.');">
+                <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
+            </form>
+        </div>
     </div>
 </nav>
 

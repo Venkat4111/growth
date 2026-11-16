@@ -22,22 +22,25 @@ public class KiteRefreshWorker {
     private final PortfolioService portfolio;
     private final KiteSessionStore store;
     private final RabbitTemplate rabbit;
+    private final MessagingConfig names;
     private volatile boolean lastFailed;
 
-    public KiteRefreshWorker(PortfolioService portfolio, KiteSessionStore store, RabbitTemplate rabbit) {
+    public KiteRefreshWorker(PortfolioService portfolio, KiteSessionStore store, RabbitTemplate rabbit,
+                            MessagingConfig names) {
+        this.names = names;
         this.portfolio = portfolio;
         this.store = store;
         this.rabbit = rabbit;
     }
 
-    @RabbitListener(queues = MessagingConfig.REFRESH_QUEUE, concurrency = "1")
+    @RabbitListener(queues = MessagingConfig.REFRESH_QUEUE_EXPR, concurrency = "1")
     public void onRefreshRequest(RefreshRequest request) {
         if (store.accessToken().isEmpty()) {
             return;
         }
         try {
             List<HoldingView> holdings = portfolio.fetchFromKite();
-            rabbit.convertAndSend(MessagingConfig.UPDATES_EXCHANGE, "",
+            rabbit.convertAndSend(names.updatesExchangeName(), "",
                     new HoldingsUpdate(Instant.now(), holdings));
             if (lastFailed) {
                 log.info("Kite holdings refresh recovered");
