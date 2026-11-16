@@ -49,4 +49,15 @@ class PortfolioMtfTest {
         assertThat(v.quantity()).isEqualTo(60);
         assertThat(v.mtfQuantity()).isZero();
     }
+
+    @Test
+    void splitsOwnMoneyAndBorrowedForMtf() {
+        Holding h = holding("BLS", 0, 100, 90, 200, 100);
+        h.mtf.initialMargin = 8000.0;
+        HoldingView v = PortfolioService.merge(List.of(h)).getFirst();
+        org.junit.jupiter.api.Assertions.assertEquals(0, new java.math.BigDecimal("20000").compareTo(v.mtfCost()));
+        org.junit.jupiter.api.Assertions.assertEquals(0, new java.math.BigDecimal("12000").compareTo(v.mtfBorrowed()));
+        org.junit.jupiter.api.Assertions.assertEquals(0, new java.math.BigDecimal("-2000").compareTo(v.mtfPnl()));
+        org.junit.jupiter.api.Assertions.assertEquals(0, new java.math.BigDecimal("8000").compareTo(v.ownMoney()));
+    }
 }

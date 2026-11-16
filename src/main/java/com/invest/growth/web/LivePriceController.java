@@ -21,7 +21,8 @@ public class LivePriceController {
     }
 
     public record Summary(BigDecimal invested, BigDecimal current, BigDecimal pnl, BigDecimal pnlPct,
-                          BigDecimal dayAmount) {
+                          BigDecimal dayAmount, BigDecimal ownMoney, BigDecimal ownMoneyPct, BigDecimal mtfOwn,
+                          BigDecimal mtfBorrowed, BigDecimal mtfPnl, BigDecimal mtfPnlPct, BigDecimal normalPnl) {
     }
 
     public record Live(long fetchedAtMillis, long serverNowMillis, Summary summary, List<Stock> stocks) {
@@ -51,10 +52,24 @@ public class LivePriceController {
         BigDecimal pnl = current.subtract(invested);
         BigDecimal pnlPct = invested.signum() == 0 ? BigDecimal.ZERO
                 : pnl.multiply(BigDecimal.valueOf(100)).divide(invested, 2, java.math.RoundingMode.HALF_UP);
+        BigDecimal own = sum(holdings, HoldingView::ownMoney);
+        BigDecimal mtfOwn = sum(holdings, HoldingView::mtfOwnMoney);
+        BigDecimal mtfPnl = sum(holdings, HoldingView::mtfPnl);
+        BigDecimal ownPct = pct(pnl, own);
         Instant fetched = portfolio.lastRefreshed();
         return ResponseEntity.ok()
                 .header("Cache-Control", "no-store")
                 .body(new Live(fetched == null ? 0 : fetched.toEpochMilli(), System.currentTimeMillis(),
-                        new Summary(invested, current, pnl, pnlPct, day), stocks));
+                        new Summary(invested, current, pnl, pnlPct, day, own, ownPct, mtfOwn,
+                                sum(holdings, HoldingView::mtfBorrowed), mtfPnl, pct(mtfPnl, mtfOwn), sum(holdings, HoldingView::normalPnl)), stocks));
+    }
+
+    private static BigDecimal sum(List<HoldingView> list, java.util.function.Function<HoldingView, BigDecimal> f) {
+        return list.stream().map(f).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal pct(BigDecimal part, BigDecimal base) {
+        return base.signum() == 0 ? BigDecimal.ZERO
+                : part.multiply(BigDecimal.valueOf(100)).divide(base, 2, java.math.RoundingMode.HALF_UP);
     }
 }

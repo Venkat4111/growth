@@ -55,6 +55,20 @@
         <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
             <div class="small text-muted">Day P&amp;L</div><div class="fw-semibold" id="sum-day-box"><span class="sum-val" id="sum-day">0.00</span></div></div></div>
     </div>
+    <div id="live-money" class="row g-2 mb-3 d-none">
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Your own money invested</div><div class="fw-semibold">₹<span class="sum-val" id="sum-own">0.00</span></div>
+            <div class="small" id="sum-own-pct-box"><span id="sum-own-pct">0.00</span>% on own money</div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">MTF: your margin / borrowed</div>
+            <div class="fw-semibold">₹<span class="sum-val" id="sum-mtfown">0.00</span> / ₹<span class="sum-val" id="sum-mtfborrowed">0.00</span></div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">MTF P&amp;L (on ₹ <span id="sum-mtfborrowed2">0.00</span> borrowed)</div>
+            <div class="fw-semibold" id="sum-mtfpnl-box"><span class="sum-val" id="sum-mtfpnl">0.00</span></div>
+            <div class="small" id="sum-mtfpct-box"><span id="sum-mtfpct">0.00</span>% of MTF margin</div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Non-MTF P&amp;L</div><div class="fw-semibold" id="sum-normalpnl-box"><span class="sum-val" id="sum-normalpnl">0.00</span></div></div></div>
+    </div>
     <div class="small text-muted mb-2">
         <span id="live-dot" class="live-dot"></span>
         <span id="live-text">Waiting for live prices…</span>
@@ -126,6 +140,16 @@
         setSummary('sum-current', null, s.current, false, animate);
         setSummary('sum-pnl', 'sum-pnl-box', s.pnl, true, animate);
         setSummary('sum-day', 'sum-day-box', s.dayAmount, true, animate);
+
+        document.getElementById('live-money').classList.remove('d-none');
+        setSummary('sum-own', null, s.ownMoney, false, animate);
+        setSummary('sum-own-pct', 'sum-own-pct-box', s.ownMoneyPct, true, animate);
+        setSummary('sum-mtfown', null, s.mtfOwn, false, animate);
+        setSummary('sum-mtfborrowed', null, s.mtfBorrowed, false, animate);
+        setSummary('sum-mtfborrowed2', null, s.mtfBorrowed, false, false);
+        setSummary('sum-mtfpnl', 'sum-mtfpnl-box', s.mtfPnl, true, animate);
+        setSummary('sum-mtfpct', 'sum-mtfpct-box', s.mtfPnlPct, true, animate);
+        setSummary('sum-normalpnl', 'sum-normalpnl-box', s.normalPnl, true, animate);
 
         data.stocks.forEach(function (st) {
             var sym = st.symbol;

@@ -98,7 +98,7 @@ public class PortfolioService {
     }
 
     private record Lot(String symbol, String exchange, int quantity, double avg, double ltp,
-                       double dayPct, double dayPerShare, int mtfQuantity) {
+                       double dayPct, double dayPerShare, int mtfQuantity, double mtfCost, double mtfOwn) {
     }
 
     /**
@@ -113,17 +113,17 @@ public class PortfolioService {
             }
             int mtfQty = "MTF".equalsIgnoreCase(h.product) ? qty : mtfQuantity(h);
             Lot lot = new Lot(h.tradingSymbol, h.exchange, qty, effectiveAveragePrice(h), nz(h.lastPrice),
-                    h.dayChangePercentage, h.dayChange, mtfQty);
+                    h.dayChangePercentage, h.dayChange, mtfQty, mtfCost(h, qty, mtfQty), mtfOwn(h, qty, mtfQty));
             bySymbol.merge(h.tradingSymbol, lot, (x, y) -> {
                 int total = x.quantity() + y.quantity();
                 double avg = (x.avg() * x.quantity() + y.avg() * y.quantity()) / total;
                 return new Lot(x.symbol(), x.exchange(), total, avg, x.ltp(), x.dayPct(), x.dayPerShare(),
-                        x.mtfQuantity() + y.mtfQuantity());
+                        x.mtfQuantity() + y.mtfQuantity(), x.mtfCost() + y.mtfCost(), x.mtfOwn() + y.mtfOwn());
             });
         }
         return bySymbol.values().stream()
                 .map(l -> HoldingView.of(l.symbol(), l.exchange(), l.quantity(), l.avg(), l.ltp(),
-                        l.dayPct(), l.dayPerShare()).withMtfQuantity(l.mtfQuantity()))
+                        l.dayPct(), l.dayPerShare()).withMtf(l.mtfQuantity(), l.mtfCost(), l.mtfOwn()))
                 .sorted(Comparator.comparing(HoldingView::tradingSymbol))
                 .toList();
     }
@@ -138,6 +138,19 @@ public class PortfolioService {
      */
     private static int mtfQuantity(Holding h) {
         return h.mtf != null ? Math.max(h.mtf.quantity, 0) : 0;
+    }
+
+    private static double mtfCost(Holding h, int qty, int mtfQty) {
+        if (mtfQty <= 0) {
+            return 0;
+        }
+        double avg = h.mtf != null && nz(h.mtf.averagePrice) > 0 ? nz(h.mtf.averagePrice) : nz(h.averagePrice);
+        return avg * mtfQty;
+    }
+
+    /** Kite's MTF initial margin is the part paid from the client's own funds. */
+    private static double mtfOwn(Holding h, int qty, int mtfQty) {
+        return h.mtf != null ? nz(h.mtf.initialMargin) : 0;
     }
 
     private static int effectiveQuantity(Holding h) {

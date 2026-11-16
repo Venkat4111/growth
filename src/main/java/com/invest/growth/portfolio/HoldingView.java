@@ -15,11 +15,42 @@ public record HoldingView(
         BigDecimal totalChangePercent,
         BigDecimal dayChangePercent,
         BigDecimal dayChangeAmount,
-        int mtfQuantity) {
+        int mtfQuantity,
+        BigDecimal mtfCost,
+        BigDecimal mtfOwnMoney) {
 
-    public HoldingView withMtfQuantity(int mtfQty) {
+    public HoldingView withMtf(int mtfQty, double cost, double ownMoney) {
         return new HoldingView(tradingSymbol, exchange, quantity, averagePrice, lastPrice, investedValue, currentValue,
-                unrealizedPnl, totalChangePercent, dayChangePercent, dayChangeAmount, mtfQty);
+                unrealizedPnl, totalChangePercent, dayChangePercent, dayChangeAmount, mtfQty,
+                money(cost), money(Math.min(ownMoney, cost)));
+    }
+
+    /** Money borrowed from the broker for the MTF part. */
+    public BigDecimal mtfBorrowed() {
+        return mtfCost.subtract(mtfOwnMoney);
+    }
+
+    public BigDecimal mtfCurrentValue() {
+        return lastPrice.multiply(BigDecimal.valueOf(mtfQuantity)).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    public BigDecimal mtfPnl() {
+        return mtfCurrentValue().subtract(mtfCost);
+    }
+
+    /** P&L of the non-MTF part. */
+    public BigDecimal normalPnl() {
+        return unrealizedPnl.subtract(mtfPnl());
+    }
+
+    /** Cost of the normal (fully paid) part. */
+    public BigDecimal normalCost() {
+        return investedValue.subtract(mtfCost);
+    }
+
+    /** What you actually paid from your own pocket: normal cost plus the MTF margin. */
+    public BigDecimal ownMoney() {
+        return normalCost().add(mtfOwnMoney);
     }
 
 
@@ -35,7 +66,8 @@ public record HoldingView(
                 ? BigDecimal.ZERO
                 : pnl.multiply(BigDecimal.valueOf(100)).divide(invested, 2, RoundingMode.HALF_UP);
         return new HoldingView(symbol, exchange, qty, avgBd, ltpBd, invested, current, pnl, pct, money(dayChangePct),
-                BigDecimal.valueOf(dayChangePerShare).multiply(qtyBd).setScale(2, RoundingMode.HALF_UP), 0);
+                BigDecimal.valueOf(dayChangePerShare).multiply(qtyBd).setScale(2, RoundingMode.HALF_UP), 0,
+                BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2));
     }
 
     private static BigDecimal money(double v) {
