@@ -14,7 +14,14 @@ public record HoldingView(
         BigDecimal unrealizedPnl,
         BigDecimal totalChangePercent,
         BigDecimal dayChangePercent,
-        BigDecimal dayChangeAmount) {
+        BigDecimal dayChangeAmount,
+        int mtfQuantity) {
+
+    public HoldingView withMtfQuantity(int mtfQty) {
+        return new HoldingView(tradingSymbol, exchange, quantity, averagePrice, lastPrice, investedValue, currentValue,
+                unrealizedPnl, totalChangePercent, dayChangePercent, dayChangeAmount, mtfQty);
+    }
+
 
     public static HoldingView of(String symbol, String exchange, int qty,
                                  double avg, double ltp, double dayChangePct, double dayChangePerShare) {
@@ -28,7 +35,7 @@ public record HoldingView(
                 ? BigDecimal.ZERO
                 : pnl.multiply(BigDecimal.valueOf(100)).divide(invested, 2, RoundingMode.HALF_UP);
         return new HoldingView(symbol, exchange, qty, avgBd, ltpBd, invested, current, pnl, pct, money(dayChangePct),
-                BigDecimal.valueOf(dayChangePerShare).multiply(qtyBd).setScale(2, RoundingMode.HALF_UP));
+                BigDecimal.valueOf(dayChangePerShare).multiply(qtyBd).setScale(2, RoundingMode.HALF_UP), 0);
     }
 
     private static BigDecimal money(double v) {

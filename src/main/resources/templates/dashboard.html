@@ -10,6 +10,19 @@
         .bg-orange { background-color: #fd7e14 !important; color: #fff; }
         .evidence-text { white-space: pre-line; font-size: .85rem; }
         .htmx-indicator { display: none; }
+        .flash-up { animation: flashUp 1.6s ease-out; }
+        .flash-down { animation: flashDown 1.6s ease-out; }
+        @keyframes flashUp { 0% { background-color: rgba(25,135,84,.45); transform: scale(1.06); } 100% { background-color: transparent; transform: scale(1); } }
+        @keyframes flashDown { 0% { background-color: rgba(220,53,69,.45); transform: scale(1.06); } 100% { background-color: transparent; transform: scale(1); } }
+        .ltp, .sum-val { display: inline-block; }
+        .ltp, [data-day], [data-total], .sum-val { transform-origin: right center; }
+        [data-day], [data-total] { display: block; }
+        .tick { opacity: 0; transition: opacity 1.8s ease-in; }
+        .tick.show { opacity: 1; transition: none; }
+        .live-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: #6c757d; }
+        .live-dot.on { background: #198754; animation: pulse 2s infinite; }
+        .live-dot.stale { background: #dc3545; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(25,135,84,.6); } 70% { box-shadow: 0 0 0 8px rgba(25,135,84,0); } 100% { box-shadow: 0 0 0 0 rgba(25,135,84,0); } }
         .htmx-request .htmx-indicator, .htmx-request.htmx-indicator { display: inline-block; }
     </style>
 </head>
@@ -25,7 +38,22 @@
 <main class="container-fluid flex-grow-1">
     <div th:replace="~{fragments/ingestion :: ingestionControl}"></div>
 
-    <!-- Initial load, then the returned fragment re-polls itself every 300s (5-minute backend cycle) -->
+    <div id="live-summary" class="row g-2 mb-3 d-none">
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Invested</div><div class="fw-semibold">₹<span class="sum-val" id="sum-invested">0.00</span></div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Current value</div><div class="fw-semibold">₹<span class="sum-val" id="sum-current">0.00</span></div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Total P&amp;L</div><div class="fw-semibold" id="sum-pnl-box"><span class="sum-val" id="sum-pnl">0.00</span></div></div></div>
+        <div class="col-6 col-md-3"><div class="bg-white shadow-sm rounded p-2">
+            <div class="small text-muted">Day P&amp;L</div><div class="fw-semibold" id="sum-day-box"><span class="sum-val" id="sum-day">0.00</span></div></div></div>
+    </div>
+    <div class="small text-muted mb-2">
+        <span id="live-dot" class="live-dot"></span>
+        <span id="live-text">Waiting for live prices…</span>
+    </div>
+
+    <!-- Initial load, then the returned fragment re-polls itself every 30s -->
     <div id="portfolio-container"
          hx-get="/dashboard/table"
          hx-trigger="load"
@@ -44,5 +72,113 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+    var POLL_MS = 2000;
+    var prev = {};      // symbol -> last known ltp
+    var prevSum = {};   // summary field -> last known value
+    var last = null;    // last successful payload
+
+    function fmt(n) {
+        return Number(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    function sign(n) { return (n > 0 ? '+' : '') + fmt(n); }
+    function flash(el, up) {
+        if (!el) { return; }
+        el.classList.remove('flash-up', 'flash-down');
+        void el.offsetWidth; // restart the animation
+        el.classList.add(up ? 'flash-up' : 'flash-down');
+    }
+    function setLine(el, text, positive) {
+        if (!el) { return false; }
+        var changed = el.textContent !== text;
+        el.textContent = text;
+        el.classList.toggle('text-success', positive);
+        el.classList.toggle('text-danger', !positive);
+        return changed;
+    }
+    function setSummary(id, boxId, value, colour, animate) {
+        var el = document.getElementById(id);
+        if (!el) { return; }
+        var text = colour ? sign(value) : fmt(value);
+        if (el.textContent !== text) {
+            el.textContent = text;
+            if (animate && prevSum[id] !== undefined && prevSum[id] !== value) { flash(el, value > prevSum[id]); }
+        }
+        prevSum[id] = value;
+        if (boxId) {
+            var box = document.getElementById(boxId);
+            box.classList.toggle('text-success', value >= 0);
+            box.classList.toggle('text-danger', value < 0);
+        }
+    }
+    function apply(data, animate) {
+        document.getElementById('live-summary').classList.remove('d-none');
+        var s = data.summary;
+        setSummary('sum-invested', null, s.invested, false, animate);
+        setSummary('sum-current', null, s.current, false, animate);
+        setSummary('sum-pnl', 'sum-pnl-box', s.pnl, true, animate);
+        setSummary('sum-day', 'sum-day-box', s.dayAmount, true, animate);
+
+        data.stocks.forEach(function (st) {
+            var sym = st.symbol;
+            var ltpEl = document.querySelector('[data-ltp="' + sym + '"]');
+            if (ltpEl) {
+                var text = fmt(st.ltp);
+                var old = prev[sym];
+                if (ltpEl.textContent !== text) { ltpEl.textContent = text; }
+                if (animate && old !== undefined && old !== st.ltp) {
+                    var up = st.ltp > old;
+                    flash(ltpEl, up);
+                    var tick = document.querySelector('[data-tick="' + sym + '"]');
+                    if (tick) {
+                        tick.textContent = (up ? '▲ ' : '▼ ') + sign(st.ltp - old);
+                        tick.classList.toggle('text-success', up);
+                        tick.classList.toggle('text-danger', !up);
+                        tick.classList.add('show');
+                        setTimeout(function () { tick.classList.remove('show'); }, 1500);
+                    }
+                }
+            }
+            prev[sym] = st.ltp;
+            var dayEl = document.querySelector('[data-day="' + sym + '"]');
+            var dayText = 'Day ' + st.dayPct.toFixed(2) + '% (₹' + fmt(st.dayAmount) + ')';
+            if (setLine(dayEl, dayText, st.dayPct >= 0) && animate) { flash(dayEl, st.dayPct >= 0); }
+            var totEl = document.querySelector('[data-total="' + sym + '"]');
+            var totText = 'Total ' + st.totalPct.toFixed(2) + '% (₹' + fmt(st.pnl) + ')';
+            if (setLine(totEl, totText, st.totalPct >= 0) && animate) { flash(totEl, st.totalPct >= 0); }
+        });
+    }
+    function status(ok, text) {
+        var dot = document.getElementById('live-dot');
+        dot.classList.toggle('on', ok);
+        dot.classList.toggle('stale', !ok);
+        document.getElementById('live-text').textContent = text;
+    }
+    function poll() {
+        fetch('/portfolio/live', {cache: 'no-store'})
+            .then(function (r) {
+                if (r.status === 401) { status(false, 'Not logged in to Kite - live prices paused'); return null; }
+                if (!r.ok) { throw new Error('HTTP ' + r.status); }
+                return r.json();
+            })
+            .then(function (data) {
+                if (!data) { return; }
+                last = data;
+                apply(data, true);
+                var age = Math.max(0, Math.round((data.serverNowMillis - data.fetchedAtMillis) / 1000));
+                var t = new Date(data.fetchedAtMillis).toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'});
+                var stale = data.fetchedAtMillis === 0 || age > 10;
+                status(!stale, stale ? 'Kite data is stale (' + age + 's old) - last update ' + t
+                                    : 'LIVE - Kite updated ' + t + ' IST (' + age + 's ago), checking every 2s');
+            })
+            .catch(function () { status(false, 'Live price connection lost - retrying'); });
+    }
+    // After the 30s table swap the server-rendered values are re-applied silently, without a flash.
+    document.body.addEventListener('htmx:afterSwap', function () { if (last) { apply(last, false); } });
+    poll();
+    setInterval(poll, POLL_MS);
+})();
+</script>
 </body>
 </html>

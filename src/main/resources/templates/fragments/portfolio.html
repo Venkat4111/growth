@@ -3,7 +3,7 @@
 <body>
 <div id="portfolio-container" th:fragment="portfolioTable"
      th:attr="hx-get=@{/dashboard/table(sort=${sort})}"
-     hx-trigger="every 300s" hx-swap="outerHTML" hx-indicator="#spinner">
+     hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
 
     <div th:if="${!#lists.isEmpty(rows)}" class="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
         <div>
@@ -51,16 +51,26 @@
                 <tr>
                     <td>
                         <strong th:text="${row.holding.tradingSymbol}">SYMBOL</strong>
-                        <div class="text-muted small" th:text="'Qty ' + ${row.holding.quantity}"></div>
+                        <div class="text-muted small">
+                            <span th:text="'Qty ' + ${row.holding.quantity}"></span>
+                            <span th:if="${row.holding.mtfQuantity > 0}" class="badge bg-info text-dark ms-1"
+                                  th:text="'MTF ' + ${row.holding.mtfQuantity}"></span>
+                        </div>
                     </td>
                     <td class="text-end"
                         th:text="${#numbers.formatDecimal(row.holding.averagePrice, 1, 'COMMA', 2, 'POINT')}">0.00</td>
                     <td class="text-end">
-                        <div th:text="${#numbers.formatDecimal(row.holding.lastPrice, 1, 'COMMA', 2, 'POINT')}">0.00</div>
-                        <div class="small"
+                        <div class="d-flex justify-content-end align-items-baseline gap-2">
+                            <span class="tick small fw-semibold" th:attr="data-tick=${row.holding.tradingSymbol}"></span>
+                            <span class="ltp fs-6 fw-semibold px-1 rounded" th:attr="data-ltp=${row.holding.tradingSymbol}"
+                                  th:text="${#numbers.formatDecimal(row.holding.lastPrice, 1, 'COMMA', 2, 'POINT')}">0.00</span>
+                        </div>
+                        <div class="small px-1 rounded"
+                             th:attr="data-day=${row.holding.tradingSymbol}"
                              th:classappend="${row.holding.dayChangePercent.signum() >= 0} ? 'text-success' : 'text-danger'"
                              th:text="'Day ' + ${row.holding.dayChangePercent} + '% (₹' + ${#numbers.formatDecimal(row.holding.dayChangeAmount, 1, 'COMMA', 2, 'POINT')} + ')'"></div>
-                        <div class="small"
+                        <div class="small px-1 rounded"
+                             th:attr="data-total=${row.holding.tradingSymbol}"
                              th:classappend="${row.holding.totalChangePercent.signum() >= 0} ? 'text-success' : 'text-danger'"
                              th:text="'Total ' + ${row.holding.totalChangePercent} + '% (₹' + ${#numbers.formatDecimal(row.holding.unrealizedPnl, 1, 'COMMA', 2, 'POINT')} + ')'"></div>
                     </td>
@@ -130,7 +140,7 @@
         </table>
     </div>
     <div class="text-muted small mt-2">
-        Last updated: <span th:text="${updatedAt}"></span> · auto-refreshes every 5 minutes
+        Last updated: <span th:text="${updatedAt}"></span> · live prices every 2s, AI analysis and sorting every 30s
     </div>
 </div>
 </body>

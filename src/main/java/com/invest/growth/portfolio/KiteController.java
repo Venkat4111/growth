@@ -48,6 +48,12 @@ public class KiteController {
         return portfolio.getHoldings();
     }
 
+    /** Raw Kite holdings (normal and MTF) exactly as returned by the API. */
+    @GetMapping("/holdings/raw")
+    public List<com.zerodhatech.models.Holding> rawHoldings() {
+        return portfolio.rawHoldings();
+    }
+
     @ExceptionHandler(KiteAuthException.class)
     public ResponseEntity<String> onAuthError(KiteAuthException e) {
         log.warn("Kite error: {}", e.getMessage());

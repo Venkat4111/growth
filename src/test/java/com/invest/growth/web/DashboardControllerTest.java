@@ -63,7 +63,7 @@ class DashboardControllerTest {
                         org.hamcrest.Matchers.containsString("bg-orange"),
                         org.hamcrest.Matchers.containsString("SELL"),
                         org.hamcrest.Matchers.containsString("1-3 Months"),
-                        org.hamcrest.Matchers.containsString("every 300s"),
+                        org.hamcrest.Matchers.containsString("every 30s"),
                         org.hamcrest.Matchers.containsString("evidence text"))));
     }
 
