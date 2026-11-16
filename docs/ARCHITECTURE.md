@@ -53,12 +53,12 @@ Base package: `com.invest.growth`. The component-scan root is this package, so a
                             ▲                                          ├─ ScreenerScraper
         portfolio.refresh.requests (max 1)                             └─ EconomicTimesParser
                             ▲
-              PortfolioRefreshScheduler (10 s)
+              PortfolioRefreshScheduler (2 s)
 ```
 
 Two independent background pipelines feed the dashboard:
 
-1. **Price pipeline (10 s):** Kite LTP and day change, routed through RabbitMQ (section 5).
+1. **Price pipeline (2 s):** Kite LTP and day change, routed through RabbitMQ (section 5).
 2. **Knowledge pipeline (5 min):** Screener and ET data, deduplicated and embedded into the vector store (section 6).
 
 The advisor combines the latest cached prices with retrieved knowledge to ask the LLM for a verdict (section 7).
@@ -83,11 +83,11 @@ com.invest.growth
 |---|---|
 | `KiteProperties` | `kite.api-key`, `kite.api-secret`, `kite.redirect-url` (record) |
 | `KiteSessionStore` | Holds the daily access token in memory. Treated as expired at the next 06:00 IST |
-| `KiteAuthService` | Builds the login URL and exchanges `request_token` for an access token |
-| `KiteController` | `GET /kite/login`, `GET /kite/callback`, `GET /kite/holdings` (raw JSON) |
+| `KiteAuthService` | Builds the login URL, exchanges `request_token` for an access token, and `logout()` (best-effort Kite session invalidation, then clears the token and cached snapshot) |
+| `KiteController` | `GET /kite/login`, `GET /kite/callback`, `GET /kite/holdings/raw` (raw Kite JSON, for diagnosing), `POST /kite/logout` |
 | `PortfolioService` | Fetches holdings from Kite, caches the latest snapshot, exposes `getHoldings()` / `getTickers()` |
-| `PortfolioRefreshScheduler` | 10 s tick that enqueues a refresh request (or refreshes directly if the broker is down) |
-| `HoldingView` | Record: symbol, exchange, quantity, average price, LTP, invested, current value, P&L, percentages, day change |
+| `PortfolioRefreshScheduler` | 2 s tick that enqueues a refresh request (or refreshes directly if the broker is down) |
+| `HoldingView` | Record: symbol, exchange, quantity, average price, LTP, invested, current value, P&L, percentages, day change, plus MTF fields (`mtfQuantity`, `mtfCost`, `mtfOwnMoney`) and derived `mtfBorrowed()`, `mtfPnl()`, `normalPnl()`, `ownMoney()` |
 | `KiteAuthException` | Raised when not logged in or Kite fails |
 
 ### 3.2 `messaging`
@@ -138,7 +138,8 @@ com.invest.growth
 | `DashboardController` | `GET /` (shell) and `GET /dashboard/table` (HTMX fragment, sorting) |
 | `DashboardRow` | View model for one table row |
 | `SortOption` | Enum of the sort choices |
-| `IngestionController` | `GET /ingestion/status`, `POST /ingestion/start|stop|run` |
+| `LivePriceController` | `GET /portfolio/live`: JSON of the cached snapshot (prices, summary, own-money and MTF split); 401 when logged out |
+| `IngestionController` | `GET /ingestion/status`, `POST /ingestion/start|stop|run` (start also runs a cycle immediately) |
 | `AdvisoryHistoryController` | `GET /advisory/history?ticker=&limit=` |
 
 ---
@@ -166,12 +167,31 @@ Notes:
 - total change % = P&L / invested
 - day change amount = per-share `dayChange` x quantity
 
+### 4.3 MTF holdings
+Kite reports MTF separately (confirmed from real `/kite/holdings/raw` output):
+- `quantity` is the normal (CNC) quantity only; `mtf.quantity`, `mtf.averagePrice`, `mtf.initialMargin` describe the MTF part.
+- The top-level `averagePrice` and `pnl` already cover normal plus MTF.
+- `PortfolioService.merge()` therefore uses total quantity = `quantity` + `mtf.quantity`, the top-level average
+  (falling back to `mtf.averagePrice` when it is 0), and merges rows by symbol. An entry with product `MTF` counts as fully MTF.
+- A stock held only through MTF (quantity 0) is still listed. The table shows an "MTF n" badge.
+
+### 4.4 Own money vs borrowed money
+- MTF cost = `mtf.averagePrice` x `mtf.quantity`.
+- Own money in MTF = `mtf.initialMargin` (assumption: Kite reports the client-paid margin here; verify against the Kite app).
+- Borrowed = MTF cost minus own MTF money. MTF P&L = LTP x MTF quantity minus MTF cost; the borrowed amount is fixed, so the whole loss is borne by the client. Broker interest is not included.
+- Your own money invested = normal cost + MTF margin; Non-MTF P&L = total P&L minus MTF P&L.
+
+### 4.5 Logout
+`POST /kite/logout` (a POST avoids accidental or prefetch logouts) calls `KiteAuthService.logout()`, which asks Kite
+to end the session (failures are logged and ignored), clears `KiteSessionStore` and the cached snapshot, then
+redirects to `/`. The navbar shows "Kite connected" plus Logout when logged in, otherwise the Kite Login button.
+
 ---
 
-## 5. 10-second price refresh through RabbitMQ
+## 5. 2-second price refresh through RabbitMQ
 
 ### 5.1 Why a broker
-Calling Kite every 10 seconds directly from the scheduler and from every dashboard request can overwhelm the
+Calling Kite every 2 seconds directly from the scheduler and from every dashboard request can overwhelm the
 application when Kite is slow or when several browser tabs are open. The refresh is therefore decoupled:
 
 - Nothing on the request path calls Kite. Controllers, the advisor and ingestion read a cached snapshot.
@@ -194,7 +214,7 @@ per-instance queue is auto-delete so it disappears when the instance stops.
 ### 5.3 Sequence
 
 ```
-PortfolioRefreshScheduler  every portfolio.refresh-rate-ms (default 10000, fixedDelay)
+PortfolioRefreshScheduler  every portfolio.refresh-rate-ms (default 2000, fixedDelay)
    │  if no Kite token → skip
    │  publish RefreshRequest ──► portfolio.refresh.requests   (keeps only the newest)
    ▼
@@ -224,7 +244,8 @@ Dashboard / Advisor / Ingestion read PortfolioService.getHoldings()
 ### 5.6 Configuration
 | Property | Meaning |
 |---|---|
-| `portfolio.refresh-rate-ms` | Interval between ticks (default 10000) |
+| `portfolio.refresh-rate-ms` | Interval between ticks (default 2000) |
+| `portfolio.messaging.prefix` | Prefix of queue and exchange names (default `portfolio`; tests use `portfolio-test` so they never consume real requests from a shared broker) |
 | `spring.rabbitmq.host/port/username/password` | Broker connection (local default `localhost:5672`, `guest`/`guest`) |
 
 `guest` works only from localhost; use real credentials elsewhere.
@@ -263,10 +284,11 @@ All HTTP calls use timeouts (`ingestion.http-timeout-ms`) and a User-Agent heade
 - `vectorStore.add(docs)` embeds the chunks with the OpenAI embedding model.
 
 ### 6.4 Run control (dashboard)
-`IngestionControl` powers the status banner and buttons:
+Ingestion is **off by default**. Nothing is collected until Start is clicked, which enables the schedule and runs a
+cycle immediately on a virtual thread. `IngestionControl` powers the status banner and buttons:
 - **RUNNING** (blue, spinner, "Processed X of Y stocks", progress bar)
 - **ACTIVE** (green, next scheduled run time)
-- **STOPPED** (red, "No new data is being collected")
+- **STOPPED** (red, "Ingestion is off. Click Start to begin collecting data.")
 - Stop / Start / Run now buttons; last run time, items added and outcome.
 
 The banner polls `/ingestion/status` every 5 seconds.
@@ -331,10 +353,12 @@ holds a history of analyses over time. Database errors are logged and never brea
 |---|---|
 | `GET /` | Dashboard shell with ingestion banner; loads the table via HTMX |
 | `GET /dashboard/table?sort=` | Table fragment (also the HTMX refresh target) |
+| `GET /portfolio/live` | JSON polled every 2 s for in-place price updates |
+| `POST /kite/logout` | Log out of Kite, redirect to `/` |
 | `GET /ingestion/status` | Ingestion banner fragment |
 | `POST /ingestion/start`, `/stop`, `/run` | Control the 5-minute pipeline |
 | `GET /advisory/history?ticker=&limit=` | Past analyses fragment |
-| `GET /kite/login`, `/kite/callback`, `/kite/holdings` | Kite OAuth and raw JSON |
+| `GET /kite/login`, `/kite/callback`, `/kite/holdings`, `/kite/holdings/raw` | Kite OAuth and JSON |
 | `GET /actuator/health`, `/actuator/info` | Exposed actuator endpoints |
 
 ### 8.2 Table
@@ -347,7 +371,12 @@ absolute amount loss, absolute percentage loss, day percentage loss, day amount 
 
 ### 8.3 Refresh behaviour
 - Table fragment re-polls itself every 30 seconds and keeps the chosen sort.
-- Prices underneath refresh from Kite every 10 seconds (section 5).
+- Prices refresh from Kite every 2 seconds (section 5). The browser polls `/portfolio/live` every 2 s and updates LTP,
+  day and total lines in place by `data-*` attributes keyed on symbol, without re-rendering the table.
+- Cosmetic feedback: green/red flash on changed values, a ▲/▼ tick delta, and a pulsing live indicator that turns red
+  when data is stale or the connection is lost. Live values are re-applied silently after each 30 s table swap.
+- Summary cards: Invested, Current value, Total P&L, Day P&L, then a money row: own money invested (and % on it),
+  MTF margin / borrowed, MTF P&L (and % of MTF margin), Non-MTF P&L (section 4.4).
 - Each table refresh collapses any open detail rows.
 - A footer always shows the disclaimer.
 
@@ -425,10 +454,13 @@ Run: `./mvnw test`
 | `web/DashboardControllerTest` | Rendering, sorting, count, login-required handling |
 | `web/IngestionControllerTest` | Status banner and start/stop |
 | `advisor/AdvisoryHistoryRepositoryTest` | Save and read history; skipped if PostgreSQL is unreachable |
+| `web/LivePriceControllerTest` | Live JSON, 401 when logged out |
+| `portfolio/PortfolioMtfTest` | MTF merge (ARE&M, BLS, BEL shapes) and own-money / borrowed split |
+| `portfolio/KiteControllerLogoutTest` | `POST /kite/logout` clears the session and redirects |
 | `messaging/HoldingsMessagingTest` | A broadcast `HoldingsUpdate` reaches the portfolio cache; skipped if RabbitMQ is unreachable |
 
 Not covered by automated tests: a real Kite login, a real OpenAI call, the full browser UI, and a long soak of the
-10-second pipeline.
+2-second pipeline.
 
 ---
 
@@ -440,7 +472,7 @@ Not covered by automated tests: a real Kite login, a real OpenAI call, the full 
 - **OpenAI credits.** A 401 means the key is missing or the placeholder was not resolved; a 429 means no credits
   or rate limit. In both cases the dashboard falls back to the last stored analysis.
 - **Kite rate limits and pricing.** Kite is a flat subscription with per-second request limits, not per-call
-  billing. One holdings call every 10 seconds is well within limits. Confirm current terms with Zerodha.
+  billing. One holdings call every 2 seconds is well within limits. Confirm current terms with Zerodha.
 - **Screener concall summaries** need a logged-in session cookie.
 - **Table refresh collapses open rows.**
 - **Message loss is acceptable.** A dropped refresh request or snapshot is replaced by the next tick.
